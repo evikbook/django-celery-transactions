@@ -5,7 +5,6 @@ from celery import current_app
 
 from celery import current_app, Task
 from celery import task as base_task, shared_task as base_shared_task
-from celery.contrib.batches import Batches
 import django
 from django.conf import settings
 from django.db import transaction
@@ -85,37 +84,7 @@ class PostTransactionTask(Task):
             else:
                 return self.original_apply_async(*args, **kwargs)
 
-
-class PostTransactionBatches(Batches):
-    """A batch of tasks whose queuing is delayed until after the current
-        transaction.
-    """
-
-    abstract = True
-
-    def original_apply_async(self, *args, **kwargs):
-        """Shortcut method to reach real implementation
-        of celery.Task.apply_sync
-        """
-        return super(PostTransactionBatches, self).apply_async(*args, **kwargs)
-
-    def apply_async(self, *args, **kwargs):
-        # Delay the task unless the client requested otherwise or transactions
-        # aren't being managed (i.e. the signal handlers won't send the task).
-
-        celery_eager = _get_celery_settings('CELERY_ALWAYS_EAGER')
-
-        # New setting to run eager task post transaction
-        # defaults to `not CELERY_ALWAYS_EAGER`
-        eager_transaction = _get_celery_settings('CELERY_EAGER_TRANSACTION',
-                                                 not celery_eager)
-
-        connection = get_connection()
-        if connection.in_atomic_block and eager_transaction:
-            _get_task_queue().append((self, args, kwargs))
-        else:
-            return self.original_apply_async(*args, **kwargs)
-
+            
 def _discard_tasks(**kwargs):
     """Discards all delayed Celery tasks.
 
